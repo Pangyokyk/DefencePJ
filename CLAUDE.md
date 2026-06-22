@@ -43,4 +43,4 @@ Unity Test Framework is installed but no tests exist yet. Tests live under `Asse
 
 ## Version Control
 
-This project is **not yet in a git repository**. Run `/setup-git` to initialize git with a Unity-appropriate `.gitignore` and `.gitattributes`.
+This project uses git. A Unity-appropriate `.gitignore` and `.gitattributes` (with UnityYAMLMerge and LFS config) are present at the project root.
