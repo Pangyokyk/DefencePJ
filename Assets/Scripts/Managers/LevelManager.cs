@@ -55,7 +55,6 @@ public class LevelManager : MonoBehaviour
     private void TriggerGameOver()
     {
         Debug.Log("[LevelManager] 게임 오버!");
-        // TODO (2단계 이후): 게임 오버 UI 표시, 씬 재로드 등 구현 예정.
-        // Time.timeScale = 0f;  ← 게임을 완전히 멈추려면 이 줄을 활성화한다.
+        GameResultManager.Instance.ShowGameOver();
     }
 }

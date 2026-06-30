@@ -1,22 +1,31 @@
 // EnemyHealth.cs
 // 몬스터의 체력을 관리하는 컴포넌트.
-// 유닛의 공격을 받으면 TakeDamage()가 호출되고, HP가 0 이하가 되면 처치된다.
-// Enemy 프리팹에 EnemyMover와 함께 붙여 사용한다.
+// 스폰 시 WaveManager가 Initialize(EnemyData)를 호출해 스탯을 주입한다.
 
 using UnityEngine;
 
 public class EnemyHealth : MonoBehaviour
 {
-    [SerializeField] private int maxHp      = 100; // Inspector에서 몬스터 종류별로 조절
-    [SerializeField] private int goldReward = 10;  // 처치 시 지급할 골드
-
-    // 현재 HP. 외부에서 읽을 수 있지만 직접 대입은 불가 (TakeDamage를 통해서만 감소)
     public int CurrentHp { get; private set; }
-    public int MaxHp => maxHp;
+    public int MaxHp     { get; private set; }
 
-    private void Awake()
+    private int goldReward;
+
+    /// <summary>
+    /// WaveManager가 스폰 직후 호출한다. EnemyData의 스탯을 이 오브젝트에 적용한다.
+    /// </summary>
+    public void Initialize(EnemyData data)
     {
-        CurrentHp = maxHp;
+        MaxHp      = data.maxHp;
+        CurrentHp  = data.maxHp;
+        goldReward = data.goldReward;
+
+        // 머티리얼 인스턴스를 생성해 색을 바꾼다.
+        // sharedMaterial을 바꾸면 같은 머티리얼을 쓰는 모든 오브젝트가 영향을 받으므로
+        // .material(인스턴스)을 사용한다.
+        Renderer rend = GetComponentInChildren<Renderer>();
+        if (rend != null)
+            rend.material.color = data.bodyColor;
     }
 
     /// <summary>
@@ -25,25 +34,14 @@ public class EnemyHealth : MonoBehaviour
     public void TakeDamage(int amount)
     {
         CurrentHp -= amount;
-        Debug.Log($"[EnemyHealth] {gameObject.name} — 피해 {amount}, 남은 HP: {CurrentHp}/{maxHp}");
-
         if (CurrentHp <= 0)
-        {
             Die();
-        }
     }
 
     private void Die()
     {
-        Debug.Log($"[EnemyHealth] {gameObject.name} 처치!");
-
-        // 골드 지급
         GoldManager.Instance.AddGold(goldReward);
-
-        // WaveManager에 "몬스터 한 마리 제거됨"을 알린다.
-        // 웨이브 클리어 판정(살아있는 몬스터 수 추적)에 사용된다.
         WaveManager.Instance.OnEnemyRemoved();
-
         Destroy(gameObject);
     }
 }
