@@ -11,6 +11,10 @@ public class WeaponData : ScriptableObject
     public string weaponName  = "무기";
     public string description = "";     // UI에 표시할 간단한 설명
 
+    [Header("가챠 설정")]
+    [Range(1, 100)]
+    public int weight = 50; // 높을수록 더 자주 뽑힘
+
     [Header("유닛 스탯 보너스 (장착 시 합산)")]
     public int   attackBonus       = 0;   // 추가 공격력
     public float attackRangeBonus  = 0f;  // 추가 사거리

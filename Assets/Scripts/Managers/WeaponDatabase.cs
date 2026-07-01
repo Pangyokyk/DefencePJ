@@ -25,4 +25,22 @@ public class WeaponDatabase : MonoBehaviour
     /// </summary>
     public WeaponData GetByName(string weaponName)
         => Array.Find(allWeapons, w => w.weaponName == weaponName);
+
+    /// <summary>
+    /// weight 기반 랜덤으로 무기 하나를 뽑아 반환한다.
+    /// </summary>
+    public WeaponData GetWeightedRandom()
+    {
+        int total = 0;
+        foreach (var w in allWeapons) total += w.weight;
+
+        int roll       = UnityEngine.Random.Range(0, total);
+        int cumulative = 0;
+        foreach (var w in allWeapons)
+        {
+            cumulative += w.weight;
+            if (roll < cumulative) return w;
+        }
+        return allWeapons[allWeapons.Length - 1];
+    }
 }

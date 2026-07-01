@@ -154,10 +154,10 @@ public class PlayerDataManager : MonoBehaviour
     // Inspector에서 이 컴포넌트 우클릭 → 아래 메뉴가 나타난다.
     // ─────────────────────────────────────────────
 
-    [ContextMenu("디버그: 골드 500 추가")]
+    [ContextMenu("디버그: 골드 5000 추가")]
     private void Debug_AddGold()
     {
-        AddPersistentGold(500);
+        AddPersistentGold(5000);
         Debug.Log($"[PlayerDataManager] 디버그 골드 추가 → 현재: {PersistentGold}G");
     }
 
