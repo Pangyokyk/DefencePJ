@@ -6,34 +6,31 @@ using UnityEngine;
 
 public class EnemyHealth : MonoBehaviour
 {
+    [Header("HP바 (프리팹 안의 BarUI 컴포넌트 연결)")]
+    [SerializeField] private BarUI hpBar;
+
     public int CurrentHp { get; private set; }
     public int MaxHp     { get; private set; }
 
     private int goldReward;
 
-    /// <summary>
-    /// WaveManager가 스폰 직후 호출한다. EnemyData의 스탯을 이 오브젝트에 적용한다.
-    /// </summary>
     public void Initialize(EnemyData data)
     {
         MaxHp      = data.maxHp;
         CurrentHp  = data.maxHp;
         goldReward = data.goldReward;
 
-        // 머티리얼 인스턴스를 생성해 색을 바꾼다.
-        // sharedMaterial을 바꾸면 같은 머티리얼을 쓰는 모든 오브젝트가 영향을 받으므로
-        // .material(인스턴스)을 사용한다.
         Renderer rend = GetComponentInChildren<Renderer>();
         if (rend != null)
             rend.material.color = data.bodyColor;
+
+        hpBar?.SetFill(CurrentHp, MaxHp); // 스폰 직후 바를 꽉 채운 상태로 초기화
     }
 
-    /// <summary>
-    /// 유닛이 공격할 때 호출한다. amount만큼 HP를 깎는다.
-    /// </summary>
     public void TakeDamage(int amount)
     {
         CurrentHp -= amount;
+        hpBar?.SetFill(CurrentHp, MaxHp); // 피해를 받을 때마다 바 갱신
         if (CurrentHp <= 0)
             Die();
     }

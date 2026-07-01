@@ -1,87 +1,179 @@
 // Unit.cs
-// 배치된 유닛의 스탯과 자동 공격 로직을 담당하는 컴포넌트.
+// 배치된 유닛의 자동 공격과 마나/스킬 로직을 담당하는 컴포넌트.
 //
-// 공격 흐름:
-//   1. 매 프레임 attackTimer를 누적한다.
-//   2. 1/attackSpeed 초가 지나면 사거리 내 몬스터를 탐색한다.
-//   3. 가장 가까운 몬스터의 EnemyHealth.TakeDamage()를 호출한다.
+// 동작 흐름:
+//   [기본 공격] 매 프레임 attackTimer 누적 → 쿨타임마다 가장 가까운 적 공격
+//   [마나]      매 프레임 manaRegenPerSec 만큼 마나 회복
+//   [스킬]      마나가 maxMana에 도달하면 스킬 자동 발동 → 마나 0 초기화
 
 using UnityEngine;
 
 public class Unit : MonoBehaviour
 {
-    [Header("기본 스탯")]
-    [SerializeField] private string unitName    = "기본 유닛";
-    [SerializeField] private int    attack      = 10;  // 공격력
-    [SerializeField] private float  attackRange = 3f;  // 사거리 (단위: m)
-    [SerializeField] private float  attackSpeed = 1f;  // 공격 횟수/초
+    // ── 기본 공격 스탯 ──────────────────────────────
+    private string    unitName;
+    private int       attack;
+    private float     attackRange;
+    private float     attackSpeed;
 
-    public string UnitName    => unitName;
-    public int    Attack      => attack;
-    public float  AttackRange => attackRange;
-    public float  AttackSpeed => attackSpeed;
+    // ── 마나 / 스킬 스탯 ────────────────────────────
+    private float     maxMana;
+    private float     manaRegenPerSec;
+    private SkillType skillType;
+    private int       skillDamage;
+    private float     skillRange;
 
-    // 다음 공격까지 남은 시간을 추적하는 타이머
+    [Header("마나바 (프리팹 안의 BarUI 컴포넌트 연결)")]
+    [SerializeField] private BarUI manaBar;
+
+    // ── 런타임 상태 ─────────────────────────────────
     private float attackTimer;
 
+    // 현재 마나를 외부(UI 등)에서 읽을 수 있도록 프로퍼티로 노출한다.
+    public float CurrentMana { get; private set; }
+    public float MaxMana     => maxMana;
+    public string UnitName   => unitName;
+
     /// <summary>
-    /// GachaSystem이 뽑은 UnitData로 스탯을 덮어쓴다.
-    /// MapTile이 유닛을 생성한 직후 호출한다.
+    /// GachaSystem이 뽑은 UnitData로 스탯을 설정한다. MapTile이 생성 직후 호출한다.
     /// </summary>
     public void Initialize(UnitData data)
     {
-        unitName    = data.unitName;
-        attack      = data.attack;
-        attackRange = data.attackRange;
-        attackSpeed = data.attackSpeed;
-    }
+        unitName        = data.unitName;
+        attack          = data.attack;
+        attackRange     = data.attackRange;
+        attackSpeed     = data.attackSpeed;
 
-    private void Start()
-    {
-        // 배치 즉시 공격할 수 있도록 타이머를 쿨타임 값으로 초기화한다.
+        maxMana         = data.maxMana;
+        manaRegenPerSec = data.manaRegenPerSec;
+        skillType       = data.skillType;
+        skillDamage     = data.skillDamage;
+        skillRange      = data.skillRange;
+
+        if (PlayerDataManager.Instance != null)
+        {
+            // 업그레이드 보너스
+            int level = PlayerDataManager.Instance.GetUnitLevel(data.unitName);
+            attack += data.attackPerLevel * level;
+
+            // 무기 보너스 — 장착된 무기가 있으면 스탯에 합산한다
+            string equippedName = PlayerDataManager.Instance.GetEquippedWeaponName(data.unitName);
+            if (!string.IsNullOrEmpty(equippedName) && WeaponDatabase.Instance != null)
+            {
+                WeaponData weapon = WeaponDatabase.Instance.GetByName(equippedName);
+                if (weapon != null)
+                {
+                    attack          += weapon.attackBonus;
+                    attackRange     += weapon.attackRangeBonus;
+                    attackSpeed     += weapon.attackSpeedBonus;
+                    manaRegenPerSec += weapon.manaRegenBonus;
+                }
+            }
+        }
+
+        CurrentMana = 0f;
         attackTimer = 1f / attackSpeed;
-        Debug.Log($"[Unit] '{unitName}' 배치 — 공격력:{attack}, 사거리:{attackRange}, 공격속도:{attackSpeed}/s");
     }
 
     private void Update()
     {
-        attackTimer += Time.deltaTime;
-
-        // 쿨타임(1/attackSpeed 초)이 지나면 공격 시도
-        if (attackTimer >= 1f / attackSpeed)
-        {
-            attackTimer = 0f;
-            TryAttack();
-        }
+        HandleAttack();
+        HandleMana();
     }
 
-    private void TryAttack()
+    // ─────────────────────────────────────────────
+    // 기본 공격
+    // ─────────────────────────────────────────────
+    private void HandleAttack()
     {
-        EnemyHealth target = FindNearestEnemy();
+        attackTimer += Time.deltaTime;
+        if (attackTimer < 1f / attackSpeed) return;
+
+        attackTimer = 0f;
+        EnemyHealth target = FindNearestEnemy(attackRange);
         if (target == null) return;
 
         target.TakeDamage(attack);
-
-        // 씬 뷰에서 공격 방향을 선으로 확인할 수 있다 (빌드에는 포함되지 않음).
+        
         Debug.DrawLine(transform.position, target.transform.position, Color.red, 0.1f);
     }
 
     // ─────────────────────────────────────────────
-    // 사거리 내 가장 가까운 몬스터를 탐색한다.
-    // Physics.OverlapSphere: 지정한 구 범위 안의 모든 Collider를 배열로 반환한다.
+    // 마나 회복 및 스킬 발동
     // ─────────────────────────────────────────────
-    private EnemyHealth FindNearestEnemy()
+    private void HandleMana()
     {
-        // attackRange 반경 내의 모든 Collider를 가져온다.
-        Collider[] hits = Physics.OverlapSphere(transform.position, attackRange);
+        CurrentMana += manaRegenPerSec * Time.deltaTime;
+
+        if (CurrentMana >= maxMana)
+        {
+            CurrentMana = 0f;
+            UseSkill();
+        }
+
+        manaBar?.SetFill(CurrentMana, maxMana);
+    }
+
+    private void UseSkill()
+    {
+        switch (skillType)
+        {
+            case SkillType.SingleStrike:
+                UseSkillSingleStrike();
+                break;
+            case SkillType.AreaBlast:
+                UseSkillAreaBlast();
+                break;
+        }
+    }
+
+    // 가장 가까운 적 한 마리에게 강력한 피해를 입힌다.
+    private void UseSkillSingleStrike()
+    {
+        EnemyHealth target = FindNearestEnemy(attackRange);
+        if (target == null) return;
+
+        target.TakeDamage(skillDamage);
+
+        // 씬 뷰에서 스킬 발동을 노란 선으로 확인한다.
+        Debug.DrawLine(transform.position, target.transform.position, Color.yellow, 0.5f);
+        Debug.Log($"[Unit] '{unitName}' 스킬 — 강타 {skillDamage} 피해!");
+    }
+
+    // 스킬 사거리 내 모든 적에게 피해를 입힌다.
+    private void UseSkillAreaBlast()
+    {
+        Collider[] hits = Physics.OverlapSphere(transform.position, skillRange);
+        int hitCount = 0;
+
+        foreach (Collider hit in hits)
+        {
+            if (!hit.CompareTag("Enemy")) continue;
+
+            EnemyHealth enemy = hit.GetComponent<EnemyHealth>();
+            if (enemy == null) continue;
+
+            enemy.TakeDamage(skillDamage);
+            Debug.DrawLine(transform.position, hit.transform.position, Color.cyan, 0.5f);
+            hitCount++;
+        }
+
+        Debug.Log($"[Unit] '{unitName}' 스킬 — 범위 폭발 {skillDamage} 피해 x{hitCount}마리!");
+    }
+
+    // ─────────────────────────────────────────────
+    // 지정 범위 내 가장 가까운 적을 탐색한다.
+    // range 파라미터를 받아 기본 공격/스킬 탐색에 공통으로 사용한다.
+    // ─────────────────────────────────────────────
+    private EnemyHealth FindNearestEnemy(float range)
+    {
+        Collider[] hits = Physics.OverlapSphere(transform.position, range);
 
         EnemyHealth nearest     = null;
         float       nearestDist = float.MaxValue;
 
         foreach (Collider hit in hits)
         {
-            // "Enemy" 태그가 붙은 오브젝트만 처리한다.
-            // (Unity 에디터에서 Enemy 프리팹에 "Enemy" 태그를 반드시 지정해야 한다.)
             if (!hit.CompareTag("Enemy")) continue;
 
             EnemyHealth enemy = hit.GetComponent<EnemyHealth>();
@@ -98,13 +190,16 @@ public class Unit : MonoBehaviour
         return nearest;
     }
 
-    // ─────────────────────────────────────────────
-    // 씬 뷰에서 사거리를 흰 원으로 시각화한다.
-    // ─────────────────────────────────────────────
     private void OnDrawGizmosSelected()
     {
-        // OnDrawGizmosSelected: 이 오브젝트가 씬 뷰에서 선택됐을 때만 그린다.
         Gizmos.color = Color.white;
         Gizmos.DrawWireSphere(transform.position, attackRange);
+
+        // 스킬 범위는 파란색으로 표시 (AreaBlast 전용)
+        if (skillType == SkillType.AreaBlast)
+        {
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawWireSphere(transform.position, skillRange);
+        }
     }
 }

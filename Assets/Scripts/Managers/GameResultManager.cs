@@ -18,8 +18,10 @@ public class GameResultManager : MonoBehaviour
     [SerializeField] private GameObject stageClearPanel; // 스테이지 클리어 패널
 
     [Header("씬 이름")]
-    // 스테이지 선택 씬의 이름. Build Settings에 등록한 씬 이름과 정확히 일치해야 한다.
     [SerializeField] private string stageSelectSceneName = "StageSelect";
+
+    [Header("클리어 보상")]
+    [SerializeField] private int clearGoldReward = 200; // 스테이지 클리어 시 지급할 지속 골드
 
     private void Awake()
     {
@@ -47,6 +49,10 @@ public class GameResultManager : MonoBehaviour
     /// </summary>
     public void ShowStageClear()
     {
+        // 클리어 보상 골드를 지속 골드에 추가한다.
+        if (PlayerDataManager.Instance != null)
+            PlayerDataManager.Instance.AddPersistentGold(clearGoldReward);
+
         Time.timeScale = 0f;
         stageClearPanel?.SetActive(true);
     }

@@ -33,20 +33,28 @@ public class WaveManager : MonoBehaviour
     [SerializeField] private GameObject enemyPrefab; // 모든 타입 공용 프리팹
     [SerializeField] private WaypointPath path;
 
-    private int enemiesAlive = 0;
-    public int CurrentWave { get; private set; } = 0;
+    private int  enemiesAlive = 0;
+    private bool hasStarted   = false; // 중복 시작 방지
+
+    public int  CurrentWave  { get; private set; } = 0;
+    public bool HasStarted   => hasStarted;
 
     private void Awake()
     {
-        if (Instance != null && Instance != this) 
-        { 
-            Destroy(gameObject); return; 
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject); return;
         }
         Instance = this;
     }
 
-    private void Start()
+    /// <summary>
+    /// GameUI의 웨이브 시작 버튼에서 호출한다.
+    /// </summary>
+    public void StartWaves()
     {
+        if (hasStarted) return;
+        hasStarted = true;
         StartCoroutine(RunAllWaves());
     }
 
